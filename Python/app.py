@@ -2,52 +2,97 @@ from flask import Flask, request, jsonify
 from ultralytics import YOLO
 import cv2
 import numpy as np
+import base64
 import os
-from datetime import datetime
 
 app = Flask(__name__)
 
-print("Chargement du modèle YOLO...")
-model = YOLO('yolov8n.pt')
-print("Modèle chargé")
+# ============================================
+# CHARGER LE MODÈLE best.pt (ton modèle entraîné)
+# ============================================
+model_path = "best.pt"
 
-UPLOAD_FOLDER = 'uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+if not os.path.exists(model_path):
+    print(f" Modèle {model_path} non trouvé!")
+    print("   Assure-toi que best.pt est dans le même dossier")
+    exit(1)
 
-@app.route('/detect', methods=['POST'])
-def detect():
-    # لازم يكون فما 4 فراغات بالظبط في أول كل سطر داخل الـ function
-    img_bytes = request.data
-    
-    if not img_bytes:
-        return jsonify({'error': 'No image'}), 400
+print(" Chargement du modèle YOLO...")
+model = YOLO(model_path)
+print(" Modèle chargé avec succès")
 
-    np_arr = np.frombuffer(img_bytes, np.uint8)
-    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-    if img is None:
-        return jsonify({'error': 'Invalid image'}), 400
-
-    results = model(img, conf=0.3) 
-    for r in results:
-        for box in r.boxes:
-            if model.names[int(box.cls[0])] == 'person':
-                person_detected = True
-                break
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"capture_{timestamp}.jpg"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    cv2.imwrite(filepath, img)
-
+# ============================================
+# ROUTE DE TEST
+# ============================================
+@app.route('/', methods=['GET'])
+def home():
     return jsonify({
-        'person_detected': person_detected,
-        'image': filename
+        "status": "running",
+        "message": "Serveur de détection d'intrusion",
+        "model": "YOLOv8 (best.pt)"
     })
 
-@app.route('/')
-def home():
-    return "Serveur YOLO opérationnel!"
+# ============================================
+# ROUTE DE SANTÉ
+# ============================================
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "healthy"})
 
+# ============================================
+# ROUTE DE DÉTECTION
+# ============================================
+@app.route('/detect', methods=['POST'])
+def detect():
+    try:
+        # Vérifier la requête
+        if not request.json or 'image' not in request.json:
+            return jsonify({"status": "error", "message": "Aucune image reçue"}), 400
+        
+        # Récupérer l'image en base64
+        image_base64 = request.json['image']
+        
+        # Décoder l'image
+        image_bytes = base64.b64decode(image_base64)
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            return jsonify({"status": "error", "message": "Image invalide"}), 400
+        
+        # Inférence YOLO avec ton modèle best.pt
+        results = model(img, conf=0.5)
+        
+        # Vérifier les détections
+        if len(results[0].boxes) > 0:
+            confidence = float(results[0].boxes[0].conf[0])
+            return jsonify({
+                "status": "alert",
+                "confidence": confidence,
+                "message": "Intrusion détectée"
+            })
+        
+        return jsonify({
+            "status": "normal",
+            "message": "Aucune intrusion"
+        })
+    
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# ============================================
+# LANCEMENT DU SERVEUR
+# ============================================
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    print("\n" + "="*50)
+    print(" SERVEUR DE DÉTECTION D'INTRUSION")
+    print("="*50)
+    print(f" Modèle: {model_path}")
+    print(f" http://0.0.0.0:5000")
+    print(f"Routes disponibles:")
+    print(f"   GET  /        - Vérifier le serveur")
+    print(f"   GET  /health  - Health check")
+    print(f"   POST /detect  - Détection d'intrusion")
+    print("="*50 + "\n")
+    
+    app.run(host='0.0.0.0', port=5000, debug=False)
