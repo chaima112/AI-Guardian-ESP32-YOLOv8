@@ -2,13 +2,12 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 
-// --- إعدادات الشبكة ---
+
 const char* ssid = "Orange-7E99";
 const char* password = "JRN8GQ7J9BD";
-// تأكدي أن هذا هو الـ IP اللي يظهر في الـ CMD متاع السيرفر
+
 const char* serverUrl = "http://192.168.1.110:5000/detect"; 
 
-// --- دبابيس الكاميرا (AI-Thinker) ---
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1
 #define XCLK_GPIO_NUM      0
@@ -51,18 +50,18 @@ void setup() {
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
-  config.frame_size = FRAMESIZE_QVGA; // حجم صورة صغير للسرعة
+  config.frame_size = FRAMESIZE_QVGA;
   config.jpeg_quality = 12;
   config.fb_count = 1;
 
-  // تشغيل الكاميرا
+  
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
     Serial.printf("Camera init failed: 0x%x", err);
     return;
   }
 
-  // الاتصال بالـ Wi-Fi
+  
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi");
   while (WiFi.status() != WL_CONNECTED) {
@@ -83,11 +82,11 @@ void loop() {
   HTTPClient http;
   http.begin(serverUrl);
   
-  // نبعثوا التصويرة كـ JPEG مباشرة
+  
   http.addHeader("Content-Type", "image/jpeg");
 
   Serial.println("Sending image to YOLO...");
-  int httpCode = http.POST(fb->buf, fb->len); // إرسال بسيط ومضمون
+  int httpCode = http.POST(fb->buf, fb->len); 
 
   if (httpCode > 0) {
     String payload = http.getString();
@@ -99,5 +98,5 @@ void loop() {
 
   http.end();
   esp_camera_fb_return(fb);
-  delay(5000); // استراحة بـ 5 ثواني
+  delay(5000); 
 }
